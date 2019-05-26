@@ -1,45 +1,38 @@
 package fnr.bedir.imagesearcher;
 
 import android.Manifest;
-import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
-import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.widget.Toast;
+import android.widget.TextView;
 
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.ml.vision.FirebaseVision;
 import com.google.firebase.ml.vision.common.FirebaseVisionImage;
-import com.google.firebase.ml.vision.text.FirebaseVisionText;
 import com.google.firebase.ml.vision.text.FirebaseVisionTextRecognizer;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+import pl.kitek.timertextview.TimerTextView;
+
+public class MainActivity extends AppCompatActivity implements View.OnClickListener, ProcessFinishedListener {
 
 
     private final int READ_STORAGE = 12;
-    private List<String> filePathList = new ArrayList<>();
+
+    private Context context;
+    FloatingActionButton fab;
+    TimerTextView timerText;
+    TextView tv;
+    TextView tvindex;
+    TextView tvtotal;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,100 +40,22 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        final Context context = getApplicationContext();
-        final FirebaseVisionTextRecognizer detector = FirebaseVision.getInstance().getOnDeviceTextRecognizer();
-        FloatingActionButton fab = findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                long startTime = System.nanoTime();
-                for (String item : filePathList
-                ) {
-                    try {
-                        FirebaseVisionImage image = FirebaseVisionImage.fromFilePath(context, Uri.fromFile(new File(item)));
 
-                        detector.processImage(image).addOnSuccessListener(new OnSuccessListener<FirebaseVisionText>() {
-                            @Override
-                            public void onSuccess(FirebaseVisionText texts) {
-                                for (FirebaseVisionText.TextBlock block : texts.getTextBlocks()) {
-                                    Log.e("path", block.getText());
+        long futureTimestamp = System.currentTimeMillis() + (10 * 60 * 60 * 1000);
+        timerText = (TimerTextView) findViewById(R.id.timerText);
+        timerText.setEndTime(futureTimestamp);
+        fab = findViewById(R.id.fab);
+        tv = findViewById(R.id.tvocr);
+        tvindex = findViewById(R.id.tindex);
+        fab.setOnClickListener(this);
+        context = getApplicationContext();
 
-                                }
-                            }
-                        }).addOnFailureListener(new OnFailureListener() {
-                            @Override
-                            public void onFailure
-                                    (@NonNull Exception exception) {
-                                Log.e("failed", "failed");
-                            }
-                        });
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-                long endTime = System.nanoTime();
-                long duration = (endTime - startTime) / 1000000;
-                Log.e("duration", duration + "");
-            }
-        });
+        tvtotal = findViewById(R.id.ttoal);
+        context = getApplicationContext();
+        //checkPermission();
 
 
-        checkPermission();
-        //
-    }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }
-
-
-    private void getAllImagesFromDevice() {
-
-        final String[] columns = {MediaStore.Images.Media.DATA, MediaStore.Images.Media._ID};
-        final String orderBy = MediaStore.Images.Media._ID;
-        //Stores all the images from the gallery in Cursor
-        Cursor cursor = getContentResolver().query(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, columns, null,
-                null, orderBy);
-        //Total number of images
-        int count = cursor.getCount();
-
-        //Create an array to store path to all the images
-
-
-        for (int i = 0; i < count; i++) {
-            cursor.moveToPosition(i);
-            int dataColumnIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATA);
-            //Store the path of the image
-            String ext = getFileExtension(cursor.getString(dataColumnIndex));
-            if (ext.equals("jpg") || ext.equals("png")) {
-                // filePathList.add(Uri.fromFile(new File(cursor.getString(dataColumnIndex))));
-                filePathList.add(cursor.getString(dataColumnIndex));
-                //Log.e("PATH", cursor.getString(dataColumnIndex));
-            }
-
-        }
-        // The cursor should be freed up after use with close()
-        cursor.close();
-        Log.e("count", filePathList.size() + "");
     }
 
 
@@ -168,7 +83,8 @@ public class MainActivity extends AppCompatActivity {
             }
         } else {
 
-            getAllImagesFromDevice();
+            //ProcessHelper.getInstance(getApplicationContext(), this).startOCRProcess();
+            //getAllImagesFromDevice();
             // Permission has already been granted
         }
     }
@@ -182,7 +98,7 @@ public class MainActivity extends AppCompatActivity {
                 // If request is cancelled, the result arrays are empty.
                 if (grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    getAllImagesFromDevice();
+                    ProcessHelper.getInstance(getApplicationContext(), this).startOCRProcess();
                     // permission was granted, yay! Do the
                     // contacts-related task you need to do.
                 } else {
@@ -197,12 +113,31 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private String getFileExtension(String fileName) {
 
-        if (fileName.lastIndexOf(".") != -1 && fileName.lastIndexOf(".") != 0)
-            return fileName.substring(fileName.lastIndexOf(".") + 1);
-        else return "";
+    @Override
+    public void onClick(View view) {
+
+
     }
 
+    @Override
+    public void processCompletelyFinished() {
 
+    }
+
+    @Override
+    public void processStartFailed() {
+
+    }
+
+    @Override
+    public void singleProcessFinished(ProcessedImage image) {
+
+
+        DBRepository.getInstance(context).getAppDatabase().imageDao().insertImage(image);
+
+        List<ProcessedImage> imageList = DBRepository.getInstance(context).getAppDatabase().imageDao().getAllImages();
+        Log.e("dbsize", imageList.size() + "");
+
+    }
 }
